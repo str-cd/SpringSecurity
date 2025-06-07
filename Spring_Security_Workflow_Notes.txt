@@ -1,0 +1,101 @@
+
+Spring Security Workflow – Detailed Notes
+
+1. User Sends an HTTP Request
+- Request could be a login (POST /login) or to access a protected resource.
+- Spring Security intercepts all requests using its filter chain.
+
+2. Security Filter Chain (FilterChainProxy)
+- Delegates through several internal filters like:
+  - SecurityContextPersistenceFilter
+  - UsernamePasswordAuthenticationFilter
+  - BasicAuthenticationFilter
+  - ExceptionTranslationFilter
+  - FilterSecurityInterceptor
+
+3. UsernamePasswordAuthenticationFilter
+- Handles login requests.
+- Extracts username and password.
+- Creates UsernamePasswordAuthenticationToken.
+- Sends it to AuthenticationManager.
+
+4. AuthenticationManager & AuthenticationProvider
+- AuthenticationManager delegates to AuthenticationProvider.
+- Default: DaoAuthenticationProvider
+  - Uses UserDetailsService to load user by username.
+  - Uses PasswordEncoder to match password.
+
+5. UserDetailsService
+- Interface that fetches user data from DB or other sources.
+  Method: loadUserByUsername(String username)
+
+6. On Successful Authentication
+- Returns an Authentication object (authenticated = true).
+- Stored in SecurityContextHolder.
+- Stored in session.
+
+7. On Authentication Failure
+- Throws AuthenticationException.
+- ExceptionTranslationFilter redirects to /login?error.
+
+8. Authorization
+- When user accesses a protected URL:
+  - FilterSecurityInterceptor intercepts the request.
+  - AccessDecisionManager checks user roles/authorities.
+  - If access allowed → proceed to controller.
+  - If denied → AccessDeniedHandler handles exception.
+
+9. Logout Workflow
+- /logout is handled by LogoutFilter.
+- Clears SecurityContextHolder, session, and cookies.
+
+Flow Recap:
+1. User -> Sends HTTP request
+2. FilterChainProxy (multiple filters)
+3. AuthenticationManager -> AuthenticationProvider -> UserDetailsService
+4. On success -> SecurityContextHolder -> Controller
+5. On failure -> ExceptionTranslationFilter
+6. On logout -> LogoutFilter
+
+Example Code Snippet:
+@EnableWebSecurity
+public class SecurityConfig extends WebSecurityConfigurerAdapter {
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http
+            .authorizeRequests()
+                .antMatchers("/admin").hasRole("ADMIN")
+                .antMatchers("/user").hasAnyRole("USER", "ADMIN")
+                .anyRequest().authenticated()
+            .and()
+            .formLogin()
+                .loginPage("/login")
+                .permitAll()
+            .and()
+            .logout()
+                .logoutSuccessUrl("/login?logout");
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Autowired
+    public void configureGlobal(AuthenticationManagerBuilder auth) throws Exception {
+        auth.userDetailsService(myUserDetailsService)
+            .passwordEncoder(passwordEncoder());
+    }
+}
+
+Key Component Summary:
+| Component                          | Role |
+|-----------------------------------|------|
+| UsernamePasswordAuthenticationFilter | Handles login |
+| AuthenticationManager             | Authenticates user |
+| AuthenticationProvider            | Validates credentials |
+| UserDetailsService                | Loads user info |
+| PasswordEncoder                   | Checks passwords |
+| SecurityContextHolder             | Stores auth info |
+| FilterSecurityInterceptor         | Enforces authorization |
+| LogoutFilter                      | Handles logout |
